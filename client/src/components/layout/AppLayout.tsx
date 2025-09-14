@@ -308,9 +308,10 @@ export function CustomButton({
         currentBranch="feature/ui-components"
         saveStatus="saved"
         isConnected={true}
+        user={user}
         onSettingsClick={() => console.log("Settings clicked")}
         onProfileClick={() => console.log("Profile clicked")}
-        onLogoutClick={() => console.log("Logout clicked")}
+        onLogoutClick={handleLogout}
       />
 
       {/* Main Content */}

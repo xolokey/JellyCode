@@ -7,11 +7,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { GitBranch, Save, Settings, LogOut, User, Wifi, WifiOff } from "lucide-react";
 
+interface User {
+  id: string;
+  username: string;
+}
+
 interface TopBarProps {
   projectName: string;
   currentBranch: string;
   saveStatus: "saved" | "saving" | "unsaved";
   isConnected: boolean;
+  user?: User | null;
   onSettingsClick?: () => void;
   onProfileClick?: () => void;
   onLogoutClick?: () => void;
@@ -22,6 +28,7 @@ export function TopBar({
   currentBranch,
   saveStatus,
   isConnected,
+  user,
   onSettingsClick,
   onProfileClick,
   onLogoutClick,
@@ -134,29 +141,41 @@ export function TopBar({
         </Button>
 
         {/* User Menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" data-testid="button-user-menu">
-              <Avatar className="w-6 h-6">
-                <AvatarImage src="" alt="User" />
-                <AvatarFallback>
-                  <User className="w-4 h-4" />
-                </AvatarFallback>
-              </Avatar>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onProfileClick} data-testid="button-profile">
-              <User className="w-4 h-4 mr-2" />
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onLogoutClick} data-testid="button-logout">
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {user ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" data-testid="button-user-menu">
+                <Avatar className="w-6 h-6">
+                  <AvatarImage src="" alt={user.username} />
+                  <AvatarFallback className="text-xs">
+                    {user.username.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled className="flex flex-col items-start">
+                <span className="font-medium" data-testid="text-username">{user.username}</span>
+                <span className="text-xs text-muted-foreground">Signed in</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onProfileClick} data-testid="button-profile">
+                <User className="w-4 h-4 mr-2" />
+                Profile
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onLogoutClick} data-testid="button-logout">
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button variant="outline" size="sm" onClick={() => window.location.reload()} data-testid="button-login">
+            <User className="w-4 h-4 mr-2" />
+            Sign In
+          </Button>
+        )}
       </div>
     </header>
   );
