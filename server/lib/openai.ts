@@ -9,7 +9,17 @@ Follow these instructions when using this blueprint:
 */
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let openai: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  if (!openai) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY environment variable is not set");
+    }
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return openai;
+}
 
 export interface CodeExplanation {
   explanation: string;
@@ -34,7 +44,7 @@ export class AICodeAssistant {
 
   async explainCode(code: string, language: string = "typescript"): Promise<CodeExplanation> {
     try {
-      const response = await openai.chat.completions.create({
+      const response = await getOpenAIClient().chat.completions.create({
         model: this.model,
         messages: [
           {
@@ -65,7 +75,7 @@ export class AICodeAssistant {
     try {
       const contextPrompt = context ? `\n\nAdditional context: ${context}` : "";
       
-      const response = await openai.chat.completions.create({
+      const response = await getOpenAIClient().chat.completions.create({
         model: this.model,
         messages: [
           {
@@ -94,7 +104,7 @@ export class AICodeAssistant {
 
   async generateTests(code: string, language: string = "typescript"): Promise<TestGeneration> {
     try {
-      const response = await openai.chat.completions.create({
+      const response = await getOpenAIClient().chat.completions.create({
         model: this.model,
         messages: [
           {
@@ -123,7 +133,7 @@ export class AICodeAssistant {
 
   async optimizeCode(code: string, language: string = "typescript"): Promise<RefactorSuggestion> {
     try {
-      const response = await openai.chat.completions.create({
+      const response = await getOpenAIClient().chat.completions.create({
         model: this.model,
         messages: [
           {
@@ -154,7 +164,7 @@ export class AICodeAssistant {
     try {
       const contextPrompt = context ? `Context: ${context}\n\n` : "";
       
-      const response = await openai.chat.completions.create({
+      const response = await getOpenAIClient().chat.completions.create({
         model: this.model,
         messages: [
           {
