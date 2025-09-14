@@ -1,0 +1,365 @@
+import { useState } from "react";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TopBar } from "./TopBar";
+import { StatusBar } from "./StatusBar";
+import { FileTree } from "../editor/FileTree";
+import { EditorTabs } from "../editor/EditorTabs";
+import { MonacoEditor } from "../editor/MonacoEditor";
+import { ChatPanel } from "../ai/ChatPanel";
+import { GitPanel } from "../git/GitPanel";
+import { SearchPanel } from "../search/SearchPanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PanelLeft, PanelRight, Files, GitBranch, Search, MessageSquare, Settings, X } from "lucide-react";
+
+interface AppLayoutProps {
+  // Add props as needed for real implementation
+}
+
+export function AppLayout({}: AppLayoutProps) {
+  const [leftPanelVisible, setLeftPanelVisible] = useState(true);
+  const [rightPanelVisible, setRightPanelVisible] = useState(true);
+  const [leftActiveTab, setLeftActiveTab] = useState("files");
+  const [rightActiveTab, setRightActiveTab] = useState("chat");
+  
+  // Mock data for demonstration
+  const [activeFile] = useState("src/components/Button.tsx");
+  const [editorTabs] = useState([
+    {
+      id: "1",
+      name: "App.tsx",
+      path: "src/App.tsx",
+      isDirty: false,
+      language: "typescript",
+    },
+    {
+      id: "2", 
+      name: "Button.tsx",
+      path: "src/components/Button.tsx",
+      isDirty: true,
+      language: "typescript",
+    },
+    {
+      id: "3",
+      name: "styles.css",
+      path: "src/styles.css", 
+      isDirty: false,
+      language: "css",
+    },
+  ]);
+
+  const mockFiles = [
+    {
+      id: "1",
+      name: "src",
+      type: "folder" as const,
+      path: "src",
+      isOpen: true,
+      children: [
+        {
+          id: "2",
+          name: "components",
+          type: "folder" as const,
+          path: "src/components",
+          children: [
+            {
+              id: "3",
+              name: "Button.tsx",
+              type: "file" as const,
+              path: "src/components/Button.tsx",
+              gitStatus: "modified" as const,
+            },
+            {
+              id: "4",
+              name: "Modal.tsx",
+              type: "file" as const,
+              path: "src/components/Modal.tsx",
+            },
+          ],
+        },
+        {
+          id: "5",
+          name: "App.tsx",
+          type: "file" as const,
+          path: "src/App.tsx",
+        },
+      ],
+    },
+    {
+      id: "6",
+      name: "package.json",
+      type: "file" as const,
+      path: "package.json",
+    },
+  ];
+
+  const sampleCode = `import React from 'react';
+import { Button } from '@/components/ui/button';
+
+interface ButtonProps {
+  variant?: 'default' | 'secondary' | 'outline';
+  size?: 'sm' | 'md' | 'lg';
+  children: React.ReactNode;
+  onClick?: () => void;
+}
+
+export function CustomButton({ 
+  variant = 'default', 
+  size = 'md',
+  children,
+  onClick 
+}: ButtonProps) {
+  return (
+    <Button 
+      variant={variant}
+      size={size}
+      onClick={onClick}
+      className="hover-elevate"
+    >
+      {children}
+    </Button>
+  );
+}`;
+
+  return (
+    <div className="h-screen flex flex-col bg-background" data-testid="app-layout">
+      {/* Top Bar */}
+      <TopBar
+        projectName="jellyai"
+        currentBranch="feature/ui-components"
+        saveStatus="saved"
+        isConnected={true}
+        onSettingsClick={() => console.log("Settings clicked")}
+        onProfileClick={() => console.log("Profile clicked")}
+        onLogoutClick={() => console.log("Logout clicked")}
+      />
+
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        <ResizablePanelGroup direction="horizontal">
+          {/* Left Sidebar */}
+          {leftPanelVisible && (
+            <>
+              <ResizablePanel defaultSize={20} minSize={15} maxSize={35}>
+                <div className="h-full flex flex-col">
+                  <Tabs value={leftActiveTab} onValueChange={setLeftActiveTab} className="h-full flex flex-col">
+                    <div className="flex items-center justify-between border-b">
+                      <TabsList className="h-8 p-0 bg-transparent">
+                        <TabsTrigger value="files" className="text-xs px-2 h-8" data-testid="tab-files">
+                          <Files className="w-3 h-3 mr-1" />
+                          Files
+                        </TabsTrigger>
+                        <TabsTrigger value="search" className="text-xs px-2 h-8" data-testid="tab-search">
+                          <Search className="w-3 h-3 mr-1" />
+                          Search
+                        </TabsTrigger>
+                        <TabsTrigger value="git" className="text-xs px-2 h-8" data-testid="tab-git">
+                          <GitBranch className="w-3 h-3 mr-1" />
+                          Git
+                        </TabsTrigger>
+                      </TabsList>
+                      
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="w-6 h-6 mr-1"
+                            onClick={() => setLeftPanelVisible(false)}
+                            data-testid="button-close-left-panel"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Hide sidebar</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+
+                    <TabsContent value="files" className="flex-1 m-0">
+                      <FileTree
+                        files={mockFiles}
+                        selectedFile={activeFile}
+                        onFileSelect={(path) => console.log("File selected:", path)}
+                        onFileCreate={(parentPath, type) => console.log("Create", type, "in", parentPath)}
+                        onFileRename={(path, newName) => console.log("Rename", path, "to", newName)}
+                        onFileDelete={(path) => console.log("Delete", path)}
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="search" className="flex-1 m-0">
+                      <SearchPanel
+                        onFileOpen={(path, line) => console.log("Open file:", path, "at line:", line)}
+                        onSearch={(query, type) => console.log("Search:", query, "type:", type)}
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="git" className="flex-1 m-0">
+                      <GitPanel
+                        onStageFile={(fileId) => console.log("Stage file:", fileId)}
+                        onUnstageFile={(fileId) => console.log("Unstage file:", fileId)}
+                        onCommit={(message) => console.log("Commit:", message)}
+                        onPush={() => console.log("Push changes")}
+                        onPull={() => console.log("Pull changes")}
+                        onBranchSwitch={(branch) => console.log("Switch to branch:", branch)}
+                        onViewDiff={(fileId) => console.log("View diff for:", fileId)}
+                      />
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              </ResizablePanel>
+              <ResizableHandle />
+            </>
+          )}
+
+          {/* Editor Area */}
+          <ResizablePanel defaultSize={leftPanelVisible && rightPanelVisible ? 60 : 80}>
+            <div className="h-full flex flex-col">
+              {/* Show left panel toggle when hidden */}
+              {!leftPanelVisible && (
+                <div className="absolute top-14 left-2 z-10">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="w-8 h-8"
+                        onClick={() => setLeftPanelVisible(true)}
+                        data-testid="button-show-left-panel"
+                      >
+                        <PanelLeft className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Show sidebar</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
+
+              <EditorTabs
+                tabs={editorTabs}
+                activeTab="2"
+                onTabSelect={(tabId) => console.log("Tab selected:", tabId)}
+                onTabClose={(tabId) => console.log("Tab closed:", tabId)}
+                onTabCloseAll={() => console.log("Close all tabs")}
+                onTabCloseOthers={(tabId) => console.log("Close others except:", tabId)}
+                onNewTab={() => console.log("New tab")}
+              />
+
+              <div className="flex-1">
+                <MonacoEditor
+                  value={sampleCode}
+                  language="typescript"
+                  onChange={(value) => console.log("Code changed:", value.length, "chars")}
+                  onCursorPositionChange={(line, column) => console.log("Cursor:", line, column)}
+                  theme="dark"
+                />
+              </div>
+            </div>
+          </ResizablePanel>
+
+          {/* Right Sidebar */}
+          {rightPanelVisible && (
+            <>
+              <ResizableHandle />
+              <ResizablePanel defaultSize={20} minSize={15} maxSize={40}>
+                <div className="h-full flex flex-col">
+                  <Tabs value={rightActiveTab} onValueChange={setRightActiveTab} className="h-full flex flex-col">
+                    <div className="flex items-center justify-between border-b">
+                      <TabsList className="h-8 p-0 bg-transparent">
+                        <TabsTrigger value="chat" className="text-xs px-2 h-8" data-testid="tab-chat">
+                          <MessageSquare className="w-3 h-3 mr-1" />
+                          AI Chat
+                        </TabsTrigger>
+                        <TabsTrigger value="settings" className="text-xs px-2 h-8" data-testid="tab-settings">
+                          <Settings className="w-3 h-3 mr-1" />
+                          Settings
+                        </TabsTrigger>
+                      </TabsList>
+                      
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="w-6 h-6 mr-1"
+                            onClick={() => setRightPanelVisible(false)}
+                            data-testid="button-close-right-panel"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Hide panel</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+
+                    <TabsContent value="chat" className="flex-1 m-0">
+                      <ChatPanel
+                        onSendMessage={(message) => console.log("Message sent:", message)}
+                        onCodeApply={(code) => console.log("Apply code:", code)}
+                        isLoading={false}
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="settings" className="flex-1 m-0 p-4">
+                      <div className="space-y-4">
+                        <h3 className="font-medium">Editor Settings</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Settings panel will be implemented here
+                        </p>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              </ResizablePanel>
+            </>
+          )}
+
+          {/* Show right panel toggle when hidden */}
+          {!rightPanelVisible && (
+            <div className="absolute top-14 right-2 z-10">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="w-8 h-8"
+                    onClick={() => setRightPanelVisible(true)}
+                    data-testid="button-show-right-panel"
+                  >
+                    <PanelRight className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Show AI panel</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+        </ResizablePanelGroup>
+      </div>
+
+      {/* Status Bar */}
+      <StatusBar
+        cursorPosition={{ line: 42, column: 15 }}
+        fileEncoding="UTF-8"
+        language="typescript"
+        gitStatus={{
+          branch: "feature/ui-components",
+          ahead: 2,
+          behind: 0,
+          modified: 3,
+          staged: 1,
+        }}
+        lspStatus="connected"
+        collaborators={2}
+        aiStatus="idle"
+      />
+    </div>
+  );
+}
