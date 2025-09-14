@@ -61,3 +61,43 @@ export const fileOperationSchema = z.object({
 
 export type LLMRequest = z.infer<typeof llmRequestSchema>;
 export type FileOperation = z.infer<typeof fileOperationSchema>;
+
+// Git-related schemas
+export const gitFileSchema = z.object({
+  path: z.string(),
+  status: z.enum(["modified", "added", "deleted", "untracked", "renamed"]),
+  staged: z.boolean(),
+  additions: z.number().optional(),
+  deletions: z.number().optional(),
+});
+
+export const gitBranchSchema = z.object({
+  name: z.string(),
+  current: z.boolean(),
+  ahead: z.number().optional(),
+  behind: z.number().optional(),
+});
+
+export const gitStatusSchema = z.object({
+  branch: z.string(),
+  ahead: z.number(),
+  behind: z.number(),
+  files: z.array(gitFileSchema),
+  staged: z.number(),
+  modified: z.number(),
+  untracked: z.number(),
+});
+
+export const gitStageRequestSchema = z.object({
+  files: z.array(z.string()),
+});
+
+export const gitCommitRequestSchema = z.object({
+  message: z.string().min(1).max(500),
+});
+
+export type GitFile = z.infer<typeof gitFileSchema>;
+export type GitBranch = z.infer<typeof gitBranchSchema>;
+export type GitStatus = z.infer<typeof gitStatusSchema>;
+export type GitStageRequest = z.infer<typeof gitStageRequestSchema>;
+export type GitCommitRequest = z.infer<typeof gitCommitRequestSchema>;

@@ -1,4 +1,4 @@
-import { LLMRequest, FileOperation } from "@shared/schema";
+import { LLMRequest, FileOperation, GitStatus, GitBranch, GitStageRequest, GitCommitRequest } from "@shared/schema";
 
 export class APIClient {
   private baseURL = "/api";
@@ -106,6 +106,54 @@ export class APIClient {
 
   async logout(): Promise<void> {
     return this.request("POST", "/logout");
+  }
+
+  // Git operations
+  async getGitStatus(): Promise<GitStatus> {
+    return this.request("GET", "/git/status");
+  }
+
+  async getGitBranches(): Promise<{ branches: GitBranch[] }> {
+    return this.request("GET", "/git/branches");
+  }
+
+  async stageFiles(files: string[]): Promise<{ success: boolean; message: string }> {
+    const request: GitStageRequest = { files };
+    return this.request("POST", "/git/stage", request);
+  }
+
+  async unstageFiles(files: string[]): Promise<{ success: boolean; message: string }> {
+    const request: GitStageRequest = { files };
+    return this.request("POST", "/git/unstage", request);
+  }
+
+  async commitChanges(message: string): Promise<{ success: boolean; message: string }> {
+    const request: GitCommitRequest = { message };
+    return this.request("POST", "/git/commit", request);
+  }
+
+  async switchBranch(branchName: string): Promise<{ success: boolean; message: string }> {
+    return this.request("POST", "/git/branch/switch", { branchName });
+  }
+
+  async createBranch(branchName: string): Promise<{ success: boolean; message: string }> {
+    return this.request("POST", "/git/branch/create", { branchName });
+  }
+
+  async pullChanges(): Promise<{ success: boolean; message: string }> {
+    return this.request("POST", "/git/pull");
+  }
+
+  async pushChanges(): Promise<{ success: boolean; message: string }> {
+    return this.request("POST", "/git/push");
+  }
+
+  async getFileDiff(filePath: string): Promise<{ diff: string }> {
+    return this.request("GET", `/git/diff/${encodeURIComponent(filePath)}`);
+  }
+
+  async getCommitHistory(limit: number = 10): Promise<{ commits: any[] }> {
+    return this.request("GET", `/git/history?limit=${limit}`);
   }
 }
 

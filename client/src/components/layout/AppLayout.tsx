@@ -20,10 +20,11 @@ import { SearchPanel } from "../search/SearchPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PanelLeft, PanelRight, Files, GitBranch, Search, MessageSquare, Settings, X, User } from "lucide-react";
 import { apiClient } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { AuthDialog } from "../auth/AuthDialog";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { GitStatus, GitBranch as GitBranchType } from "@shared/schema";
 
 interface AppLayoutProps {
   // Add props as needed for real implementation
@@ -106,6 +107,132 @@ export function AppLayout({}: AppLayoutProps) {
       setFileContent(fileData.content);
     }
   }, [fileData]);
+
+  // Git operations - fetch Git status and branches (only when authenticated)
+  const { data: gitStatus, refetch: refetchGitStatus } = useQuery({
+    queryKey: ["/api/git/status"],
+    queryFn: () => apiClient.getGitStatus(),
+    enabled: !!user,
+    refetchOnWindowFocus: false,
+    refetchInterval: 5000, // Refresh every 5 seconds to keep status current
+  });
+
+  const { data: gitBranchesData } = useQuery({
+    queryKey: ["/api/git/branches"],
+    queryFn: () => apiClient.getGitBranches(),
+    enabled: !!user,
+    refetchOnWindowFocus: false,
+  });
+
+  // Git mutations
+  const stageFilesMutation = useMutation({
+    mutationFn: (files: string[]) => apiClient.stageFiles(files),
+    onSuccess: () => {
+      toast({
+        title: "Files staged",
+        description: "Files staged successfully",
+      });
+      refetchGitStatus();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Stage failed",
+        description: error.message || "Failed to stage files",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const unstageFilesMutation = useMutation({
+    mutationFn: (files: string[]) => apiClient.unstageFiles(files),
+    onSuccess: () => {
+      toast({
+        title: "Files unstaged",
+        description: "Files unstaged successfully",
+      });
+      refetchGitStatus();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unstage failed",
+        description: error.message || "Failed to unstage files",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const commitMutation = useMutation({
+    mutationFn: (message: string) => apiClient.commitChanges(message),
+    onSuccess: () => {
+      toast({
+        title: "Changes committed",
+        description: "Changes committed successfully",
+      });
+      refetchGitStatus();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Commit failed", 
+        description: error.message || "Failed to commit changes",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const pushMutation = useMutation({
+    mutationFn: () => apiClient.pushChanges(),
+    onSuccess: () => {
+      toast({
+        title: "Changes pushed",
+        description: "Changes pushed successfully",
+      });
+      refetchGitStatus();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Push failed",
+        description: error.message || "Failed to push changes",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const pullMutation = useMutation({
+    mutationFn: () => apiClient.pullChanges(),
+    onSuccess: () => {
+      toast({
+        title: "Changes pulled",
+        description: "Changes pulled successfully",
+      });
+      refetchGitStatus();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Pull failed",
+        description: error.message || "Failed to pull changes",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const switchBranchMutation = useMutation({
+    mutationFn: (branchName: string) => apiClient.switchBranch(branchName),
+    onSuccess: (_, branchName) => {
+      toast({
+        title: "Branch switched",
+        description: `Switched to branch: ${branchName}`,
+      });
+      refetchGitStatus();
+      queryClient.invalidateQueries({ queryKey: ["/api/git/branches"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Branch switch failed",
+        description: error.message || "Failed to switch branch",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleFileSelect = async (path: string) => {
     console.log("File selected:", path);
@@ -316,7 +443,7 @@ export function CustomButton({
       {/* Top Bar */}
       <TopBar
         projectName="jellyai"
-        currentBranch="feature/ui-components"
+        currentBranch={gitStatus?.branch || "main"}
         saveStatus="saved"
         isConnected={true}
         user={user}
@@ -389,13 +516,79 @@ export function CustomButton({
 
                     <TabsContent value="git" className="flex-1 m-0">
                       <GitPanel
-                        onStageFile={(fileId) => console.log("Stage file:", fileId)}
-                        onUnstageFile={(fileId) => console.log("Unstage file:", fileId)}
-                        onCommit={(message) => console.log("Commit:", message)}
-                        onPush={() => console.log("Push changes")}
-                        onPull={() => console.log("Pull changes")}
-                        onBranchSwitch={(branch) => console.log("Switch to branch:", branch)}
-                        onViewDiff={(fileId) => console.log("View diff for:", fileId)}
+                        currentBranch={gitStatus?.branch || "main"}
+                        branches={gitBranchesData?.branches || []}
+                        files={gitStatus?.files.map(file => ({
+                          id: file.path,
+                          path: file.path,
+                          status: file.status,
+                          staged: file.staged,
+                          additions: file.additions,
+                          deletions: file.deletions,
+                        })) || []}
+                        onStageFile={(filePath) => {
+                          if (!user) {
+                            setAuthDialogOpen(true);
+                            return;
+                          }
+                          stageFilesMutation.mutate([filePath]);
+                        }}
+                        onUnstageFile={(filePath) => {
+                          if (!user) {
+                            setAuthDialogOpen(true);
+                            return;
+                          }
+                          unstageFilesMutation.mutate([filePath]);
+                        }}
+                        onCommit={(message) => {
+                          if (!user) {
+                            setAuthDialogOpen(true);
+                            return;
+                          }
+                          commitMutation.mutate(message);
+                        }}
+                        onPush={() => {
+                          if (!user) {
+                            setAuthDialogOpen(true);
+                            return;
+                          }
+                          pushMutation.mutate();
+                        }}
+                        onPull={() => {
+                          if (!user) {
+                            setAuthDialogOpen(true);
+                            return;
+                          }
+                          pullMutation.mutate();
+                        }}
+                        onBranchSwitch={(branchName) => {
+                          if (!user) {
+                            setAuthDialogOpen(true);
+                            return;
+                          }
+                          switchBranchMutation.mutate(branchName);
+                        }}
+                        onViewDiff={async (filePath) => {
+                          if (!user) {
+                            setAuthDialogOpen(true);
+                            return;
+                          }
+                          try {
+                            const response = await apiClient.getFileDiff(filePath);
+                            console.log("File diff:", response.diff);
+                            // TODO: Show diff in a modal or side panel
+                            toast({
+                              title: "Diff generated",
+                              description: `Diff for ${filePath} logged to console`,
+                            });
+                          } catch (error: any) {
+                            toast({
+                              title: "Diff failed",
+                              description: error.message || "Failed to get file diff",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
                       />
                     </TabsContent>
                   </Tabs>
