@@ -21,6 +21,7 @@ interface TopBarProps {
   onSettingsClick?: () => void;
   onProfileClick?: () => void;
   onLogoutClick?: () => void;
+  onLoginClick?: () => void;
 }
 
 export function TopBar({
@@ -32,8 +33,9 @@ export function TopBar({
   onSettingsClick,
   onProfileClick,
   onLogoutClick,
+  onLoginClick,
 }: TopBarProps) {
-  const [presenceUsers] = useState([
+  const [collaborators] = useState([
     { id: "1", name: "Alice Johnson", avatar: "", initials: "AJ" },
     { id: "2", name: "Bob Smith", avatar: "", initials: "BS" },
   ]);
@@ -109,7 +111,7 @@ export function TopBar({
       <div className="flex items-center gap-2">
         {/* Collaboration Presence */}
         <div className="flex items-center -space-x-2">
-          {presenceUsers.map((user) => (
+          {collaborators.map((user) => (
             <Tooltip key={user.id}>
               <TooltipTrigger asChild>
                 <Avatar className="w-6 h-6 border-2 border-background" data-testid={`avatar-user-${user.id}`}>
@@ -171,7 +173,7 @@ export function TopBar({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <Button variant="outline" size="sm" onClick={() => window.location.reload()} data-testid="button-login">
+          <Button variant="outline" size="sm" onClick={onLoginClick} data-testid="button-login">
             <User className="w-4 h-4 mr-2" />
             Sign In
           </Button>

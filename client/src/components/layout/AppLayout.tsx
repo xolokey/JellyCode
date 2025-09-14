@@ -23,6 +23,7 @@ import { apiClient } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { AuthDialog } from "../auth/AuthDialog";
 import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 
 interface AppLayoutProps {
   // Add props as needed for real implementation
@@ -142,10 +143,20 @@ export function AppLayout({}: AppLayoutProps) {
     setAuthDialogOpen(false);
   };
 
+  const handleLoginClick = () => {
+    setAuthDialogOpen(true);
+  };
+
   const handleLogout = async () => {
     try {
       await apiClient.logout();
       setUser(null);
+      // Invalidate all authentication and file-related queries
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/files/tree"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/files/content"] });
+      // Show auth dialog after logout
+      setAuthDialogOpen(true);
       toast({
         title: "Logged out",
         description: "You have been successfully logged out.",
@@ -312,6 +323,7 @@ export function CustomButton({
         onSettingsClick={() => console.log("Settings clicked")}
         onProfileClick={() => console.log("Profile clicked")}
         onLogoutClick={handleLogout}
+        onLoginClick={handleLoginClick}
       />
 
       {/* Main Content */}
