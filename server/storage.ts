@@ -1,8 +1,11 @@
-import { type User, type InsertUser, type Project, type InsertProject, type File, type InsertFile } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type File, type InsertFile, users, projects, files } from "@shared/schema";
 import { randomUUID } from "crypto";
 // Integration blueprint: javascript_auth_all_persistance
 import session from "express-session";
 import createMemoryStore from "memorystore";
+// Integration blueprint: javascript_database
+import { db } from "./db";
+import { eq, and } from "drizzle-orm";
 
 const MemoryStore = createMemoryStore(session);
 
@@ -33,16 +36,11 @@ export interface IStorage {
   sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private projects: Map<string, Project>;
-  private files: Map<string, File>;
+// Integration blueprint: javascript_database
+export class DatabaseStorage implements IStorage {
   public sessionStore: session.Store;
 
   constructor() {
-    this.users = new Map();
-    this.projects = new Map();
-    this.files = new Map();
     // Integration blueprint: javascript_auth_all_persistance
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000, // prune expired entries every 24h
@@ -51,101 +49,90 @@ export class MemStorage implements IStorage {
 
   // User methods
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
     return user;
   }
 
   // Project methods
   async getProject(id: string): Promise<Project | undefined> {
-    return this.projects.get(id);
+    const [project] = await db.select().from(projects).where(eq(projects.id, id));
+    return project || undefined;
   }
 
   async getUserProjects(userId: string): Promise<Project[]> {
-    return Array.from(this.projects.values()).filter(
-      (project) => project.userId === userId,
-    );
+    const userProjects = await db.select().from(projects).where(eq(projects.userId, userId));
+    return userProjects;
   }
 
   async createProject(projectData: InsertProject & { userId: string }): Promise<Project> {
-    const id = randomUUID();
-    const project: Project = {
-      ...projectData,
-      id,
-      createdAt: new Date(),
-    };
-    this.projects.set(id, project);
+    const [project] = await db
+      .insert(projects)
+      .values(projectData)
+      .returning();
     return project;
   }
 
   async deleteProject(id: string): Promise<void> {
     // Delete all files in the project first
-    const projectFiles = Array.from(this.files.values()).filter(
-      (file) => file.projectId === id,
-    );
-    for (const file of projectFiles) {
-      this.files.delete(file.id);
-    }
-    this.projects.delete(id);
+    await db.delete(files).where(eq(files.projectId, id));
+    await db.delete(projects).where(eq(projects.id, id));
   }
 
   // File methods
   async getFile(id: string): Promise<File | undefined> {
-    return this.files.get(id);
+    const [file] = await db.select().from(files).where(eq(files.id, id));
+    return file || undefined;
   }
 
   async getProjectFiles(projectId: string): Promise<File[]> {
-    return Array.from(this.files.values()).filter(
-      (file) => file.projectId === projectId,
-    );
+    const projectFiles = await db.select().from(files).where(eq(files.projectId, projectId));
+    return projectFiles;
   }
 
   async getFileByPath(projectId: string, path: string): Promise<File | undefined> {
-    return Array.from(this.files.values()).find(
-      (file) => file.projectId === projectId && file.path === path,
+    const [file] = await db.select().from(files).where(
+      and(eq(files.projectId, projectId), eq(files.path, path))
     );
+    return file || undefined;
   }
 
   async createFile(insertFile: InsertFile): Promise<File> {
-    const id = randomUUID();
-    const file: File = {
-      ...insertFile,
-      id,
-      projectId: insertFile.projectId || null,
-      lastModified: new Date(),
-    };
-    this.files.set(id, file);
+    const [file] = await db
+      .insert(files)
+      .values(insertFile)
+      .returning();
     return file;
   }
 
   async updateFile(id: string, content: string): Promise<File> {
-    const file = this.files.get(id);
+    const [file] = await db
+      .update(files)
+      .set({ content, lastModified: new Date() })
+      .where(eq(files.id, id))
+      .returning();
+    
     if (!file) {
       throw new Error("File not found");
     }
-    const updatedFile: File = {
-      ...file,
-      content,
-      lastModified: new Date(),
-    };
-    this.files.set(id, updatedFile);
-    return updatedFile;
+    return file;
   }
 
   async deleteFile(id: string): Promise<void> {
-    this.files.delete(id);
+    await db.delete(files).where(eq(files.id, id));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

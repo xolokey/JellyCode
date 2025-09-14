@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import React from "react";
 
 declare global {
@@ -18,9 +18,11 @@ import { ChatPanel } from "../ai/ChatPanel";
 import { GitPanel } from "../git/GitPanel";
 import { SearchPanel } from "../search/SearchPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PanelLeft, PanelRight, Files, GitBranch, Search, MessageSquare, Settings, X } from "lucide-react";
+import { PanelLeft, PanelRight, Files, GitBranch, Search, MessageSquare, Settings, X, User } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
+import { AuthDialog } from "../auth/AuthDialog";
+import { useToast } from "@/hooks/use-toast";
 
 interface AppLayoutProps {
   // Add props as needed for real implementation
@@ -31,85 +33,15 @@ export function AppLayout({}: AppLayoutProps) {
   const [rightPanelVisible, setRightPanelVisible] = useState(true);
   const [leftActiveTab, setLeftActiveTab] = useState("files");
   const [rightActiveTab, setRightActiveTab] = useState("chat");
+  const [user, setUser] = useState(null);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const { toast } = useToast();
   
   // State variables for file management
   const [activeFile, setActiveFile] = useState("src/components/Button.tsx");
   const [fileContent, setFileContent] = useState("");
 
-  // Fetch file tree from backend
-  const { data: fileTreeData } = useQuery({
-    queryKey: ["/api/files/tree"],
-    queryFn: () => apiClient.getFileTree(),
-    refetchOnWindowFocus: false,
-  });
-
-  // Load file content when active file changes
-  const { data: fileData } = useQuery({
-    queryKey: ["/api/files/content", activeFile],
-    queryFn: () => apiClient.readFile(activeFile),
-    enabled: !!activeFile,
-    refetchOnWindowFocus: false,
-  });
-
-  // Update content when file data loads
-  React.useEffect(() => {
-    if (fileData?.content) {
-      setFileContent(fileData.content);
-    }
-  }, [fileData]);
-
-  const handleFileSelect = async (path: string) => {
-    console.log("File selected:", path);
-    setActiveFile(path);
-  };
-
-  const handleFileSave = async (content: string) => {
-    if (!activeFile) return;
-    try {
-      await apiClient.writeFile(activeFile, content);
-      console.log("File saved successfully");
-    } catch (error) {
-      console.error("Failed to save file:", error);
-    }
-  };
-
-  const handleLLMRequest = async (message: string) => {
-    try {
-      const response = await apiClient.chatCompletion(message, fileContent);
-      console.log("LLM response:", response);
-      return response;
-    } catch (error) {
-      console.error("LLM request failed:", error);
-      throw error;
-    }
-  };
-
-  const handleCodeAction = async (action: string, code: string) => {
-    try {
-      let response;
-      switch (action) {
-        case "explain":
-          response = await apiClient.explainCode(code);
-          break;
-        case "refactor":
-          response = await apiClient.refactorCode(code, fileContent);
-          break;
-        case "generate-tests":
-          response = await apiClient.generateTests(code);
-          break;
-        case "optimize":
-          response = await apiClient.optimizeCode(code);
-          break;
-        default:
-          throw new Error("Unknown action");
-      }
-      console.log("Code action response:", response);
-      return response;
-    } catch (error) {
-      console.error("Code action failed:", error);
-      throw error;
-    }
-  };
+  // Editor tabs state - moved here to ensure all hooks are called in same order
   const [editorTabs] = useState([
     {
       id: "1",
@@ -134,6 +66,96 @@ export function AppLayout({}: AppLayoutProps) {
     },
   ]);
 
+  // Check current user authentication status
+  const { data: currentUser, isLoading: userLoading } = useQuery({
+    queryKey: ["/api/user"],
+    queryFn: () => apiClient.getCurrentUser(),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Set user when authentication data loads
+  useEffect(() => {
+    if (currentUser) {
+      setUser(currentUser);
+    } else if (!userLoading && !currentUser) {
+      setAuthDialogOpen(true);
+    }
+  }, [currentUser, userLoading]);
+
+  // Fetch file tree from backend (only when authenticated)
+  const { data: fileTreeData } = useQuery({
+    queryKey: ["/api/files/tree"],
+    queryFn: () => apiClient.getFileTree(),
+    enabled: !!user,
+    refetchOnWindowFocus: false,
+  });
+
+  // Load file content when active file changes (only when authenticated)
+  const { data: fileData } = useQuery({
+    queryKey: ["/api/files/content", activeFile],
+    queryFn: () => apiClient.readFile(activeFile),
+    enabled: !!activeFile && !!user,
+    refetchOnWindowFocus: false,
+  });
+
+  // Update content when file data loads
+  useEffect(() => {
+    if (fileData?.content) {
+      setFileContent(fileData.content);
+    }
+  }, [fileData]);
+
+  const handleFileSelect = async (path: string) => {
+    console.log("File selected:", path);
+    setActiveFile(path);
+  };
+
+  const handleFileSave = async (content: string) => {
+    if (!activeFile) return;
+    if (!user) {
+      setAuthDialogOpen(true);
+      return;
+    }
+    try {
+      await apiClient.writeFile(activeFile, content);
+      console.log("File saved successfully");
+      toast({
+        title: "File saved",
+        description: `Successfully saved ${activeFile}`,
+      });
+    } catch (error: any) {
+      console.error("Failed to save file:", error);
+      if (error?.message?.includes("Authentication")) {
+        setAuthDialogOpen(true);
+      }
+      toast({
+        title: "Save failed",
+        description: "Failed to save file. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAuthSuccess = (userData: any) => {
+    setUser(userData);
+    setAuthDialogOpen(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await apiClient.logout();
+      setUser(null);
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out.",
+      });
+    } catch (error: any) {
+      console.error("Logout failed:", error);
+    }
+  };
+
+  // Mock data and constants - moved here to be defined before conditional rendering
   const mockFiles = [
     {
       id: "1",
@@ -206,6 +228,77 @@ export function CustomButton({
     </Button>
   );
 }`;
+
+  // Show loading state while checking authentication
+  if (userLoading) {
+    return (
+      <div className="h-screen flex flex-col bg-background">
+        <div className="flex h-screen items-center justify-center" data-testid="loading-auth">
+          <div className="text-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading JellyAI IDE...</p>
+          </div>
+        </div>
+        <AuthDialog
+          open={authDialogOpen}
+          onClose={() => setAuthDialogOpen(false)}
+          onAuthSuccess={handleAuthSuccess}
+        />
+      </div>
+    );
+  }
+
+  const handleLLMRequest = async (message: string) => {
+    if (!user) {
+      setAuthDialogOpen(true);
+      throw new Error("Please log in to use AI features");
+    }
+    try {
+      const response = await apiClient.chatCompletion(message, fileContent);
+      console.log("LLM response:", response);
+      return response;
+    } catch (error: any) {
+      console.error("LLM request failed:", error);
+      if (error?.message?.includes("Authentication")) {
+        setAuthDialogOpen(true);
+      }
+      throw error;
+    }
+  };
+
+  const handleCodeAction = async (action: string, code: string) => {
+    if (!user) {
+      setAuthDialogOpen(true);
+      throw new Error("Please log in to use AI features");
+    }
+    try {
+      let response;
+      switch (action) {
+        case "explain":
+          response = await apiClient.explainCode(code);
+          break;
+        case "refactor":
+          response = await apiClient.refactorCode(code, fileContent);
+          break;
+        case "generate-tests":
+          response = await apiClient.generateTests(code);
+          break;
+        case "optimize":
+          response = await apiClient.optimizeCode(code);
+          break;
+        default:
+          throw new Error("Unknown action");
+      }
+      console.log("Code action response:", response);
+      return response;
+    } catch (error: any) {
+      console.error("Code action failed:", error);
+      if (error?.message?.includes("Authentication")) {
+        setAuthDialogOpen(true);
+      }
+      throw error;
+    }
+  };
 
   return (
     <div className="h-screen flex flex-col bg-background" data-testid="app-layout">
