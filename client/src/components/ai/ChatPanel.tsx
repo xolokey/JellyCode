@@ -6,6 +6,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Send, User, Bot, Copy, Code, Trash2, MoreVertical, Sparkles, Zap, MessageSquare } from "lucide-react";
+import { apiClient } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 interface ChatMessage {
   id: string;
@@ -16,16 +18,20 @@ interface ChatMessage {
 }
 
 interface ChatPanelProps {
-  onSendMessage?: (message: string) => void;
+  onSendMessage?: (message: string) => Promise<any>;
   onCodeApply?: (code: string) => void;
   isLoading?: boolean;
+  onAuthRequired?: () => void;
 }
 
 export function ChatPanel({
   onSendMessage,
   onCodeApply,
   isLoading = false,
+  onAuthRequired,
 }: ChatPanelProps) {
+  const { toast } = useToast();
+  const [isAILoading, setIsAILoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "1",
@@ -51,8 +57,8 @@ export function ChatPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSendMessage = () => {
-    if (!input.trim() || isLoading) return;
+  const handleSendMessage = async () => {
+    if (!input.trim() || isLoading || isAILoading) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -64,20 +70,62 @@ export function ChatPanel({
 
     setMessages(prev => [...prev, userMessage]);
     console.log("User message sent:", input);
-    onSendMessage?.(input);
+    const userInput = input;
     setInput("");
+    setIsAILoading(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      // Call the parent component's onSendMessage handler (which handles AI API calls)
+      const response = await onSendMessage?.(userInput);
+      
       const aiResponse: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: `I understand you want help with: "${input}". Here's what I can suggest:\n\n\`\`\`typescript\n// This is a sample response\nfunction optimizedFunction() {\n  // Improved implementation\n  return result;\n}\n\`\`\`\n\nWould you like me to explain this further or make any adjustments?`,
+        content: response?.message || response?.explanation || "I'm here to help! Could you provide more details about what you'd like me to assist with?",
         timestamp: new Date(),
-        type: "code",
+        type: response?.refactoredCode || response?.testCode ? "code" : "text",
       };
+      
       setMessages(prev => [...prev, aiResponse]);
-    }, 1000);
+      
+      toast({
+        title: "AI Response",
+        description: "AI assistant has responded to your question.",
+      });
+      
+    } catch (error: any) {
+      console.error("AI request failed:", error);
+      
+      // Check for authentication errors - APIClient throws "HTTP 401: Unauthorized"
+      if (error?.message?.includes("Authentication") || 
+          error?.status === 401 || 
+          error?.message?.startsWith("HTTP 401")) {
+        onAuthRequired?.();
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to use AI features.",
+          variant: "destructive",
+        });
+      } else {
+        const errorResponse: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "I'm sorry, I encountered an error while processing your request. Please try again or rephrase your question.",
+          timestamp: new Date(),
+          type: "error",
+        };
+        
+        setMessages(prev => [...prev, errorResponse]);
+        
+        toast({
+          title: "AI Error",
+          description: "Failed to get AI response. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setIsAILoading(false);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -114,7 +162,7 @@ export function ChatPanel({
         <div className="flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-primary" />
           <span className="font-medium">AI Assistant</span>
-          {isLoading && (
+          {(isLoading || isAILoading) && (
             <Badge variant="secondary" className="text-xs">
               <Zap className="w-3 h-3 mr-1 animate-pulse" />
               Thinking...
@@ -261,7 +309,7 @@ export function ChatPanel({
           />
           <Button
             onClick={handleSendMessage}
-            disabled={!input.trim() || isLoading}
+            disabled={!input.trim() || isLoading || isAILoading}
             size="icon"
             data-testid="button-send-message"
           >

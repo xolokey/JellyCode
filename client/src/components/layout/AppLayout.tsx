@@ -503,6 +503,7 @@ export function CustomButton({
                           setFileContent(code);
                           handleFileSave(code);
                         }}
+                        onAuthRequired={() => setAuthDialogOpen(true)}
                         isLoading={false}
                       />
                     </TabsContent>
