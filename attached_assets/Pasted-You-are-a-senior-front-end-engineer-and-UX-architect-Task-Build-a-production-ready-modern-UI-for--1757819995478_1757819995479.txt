@@ -1,0 +1,58 @@
+You are a senior front-end engineer and UX architect.
+Task: Build a production-ready, modern UI for JellyAI (an open-source Cursor-like editor) using React + Vite + TailwindCSS + Framer Motion + Lucide Icons.
+
+### Requirements
+
+1. **Base Layout**
+   - Responsive grid layout with left sidebar (file explorer, Git panel, search), main editor area (Monaco Editor tabs), right panel (AI chat, settings, plugin manager).
+   - Top bar: project name, branch info, save status, user profile menu.
+   - Bottom status bar: cursor position, LSP status, collab presence indicators.
+
+2. **Panels & Features**
+   - **File Explorer**: Tree view, new file/folder, rename, delete, drag & drop reorder.
+   - **Git Panel**: Stage changes, commit, branch selector, diff viewer in modal.
+   - **AI Chat Panel**: Expandable drawer with chat history, refactor/explain/test-gen commands, streaming responses with code formatting.
+   - **Search Panel**: Embeddings-based search with fuzzy + vector results, jump-to-file.
+   - **Plugin Manager**: List installed plugins, enable/disable, settings per plugin.
+   - **Settings Panel**: Model config (OpenAI/local LLM), themes, keybindings.
+
+3. **Real-Time Collaboration**
+   - Presence avatars in top bar.
+   - Shared cursors with user colors in editor.
+   - "Follow user" mode to watch another user's view.
+
+4. **Visual Design**
+   - Light/dark theme toggle.
+   - Framer Motion animations for panel open/close, toast notifications.
+   - Lucide Icons for all actions (save, branch, search, settings, chat).
+
+5. **UI Components**
+   - Reusable components: Modal, Drawer, Tabs, Dropdown, Toast, Tooltip, Avatar, Progress bar.
+   - Accessible keyboard shortcuts for switching tabs, opening panels, running AI commands.
+
+6. **Integration Points**
+   - AI actions trigger backend APIs (already implemented).
+   - Git operations via REST endpoints.
+   - Collab state from WebSocket/Yjs layer.
+   - Search results from embeddings API.
+
+7. **Testing**
+   - Unit tests for all components with React Testing Library.
+   - Cypress/Playwright E2E tests for main flows: editing, committing, AI chat, search.
+
+8. **Deliverables**
+   - `/frontend/src/components` with modular structure.
+   - `/frontend/src/pages` for main views.
+   - `/frontend/src/hooks` for API calls, state management.
+   - Tailwind config with custom colors, spacing, typography.
+   - `theme.ts` for light/dark mode tokens.
+
+Acceptance criteria:
+- Panels resize smoothly, open/close animations < 200ms.
+- Dark mode fully styled.
+- Keyboard shortcuts documented in settings panel.
+- All main flows pass E2E tests.
+
+Constraints:
+- Use only open-source dependencies (MIT, Apache, BSD).
+- Code must be type-safe (TypeScript) and production-ready.
