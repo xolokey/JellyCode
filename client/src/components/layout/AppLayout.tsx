@@ -31,6 +31,10 @@ export function AppLayout({}: AppLayoutProps) {
   const [rightPanelVisible, setRightPanelVisible] = useState(true);
   const [leftActiveTab, setLeftActiveTab] = useState("files");
   const [rightActiveTab, setRightActiveTab] = useState("chat");
+  
+  // State variables for file management
+  const [activeFile, setActiveFile] = useState("src/components/Button.tsx");
+  const [fileContent, setFileContent] = useState("");
 
   // Fetch file tree from backend
   const { data: fileTreeData } = useQuery({
@@ -106,10 +110,6 @@ export function AppLayout({}: AppLayoutProps) {
       throw error;
     }
   };
-  
-  // Mock data for demonstration
-  const [activeFile, setActiveFile] = useState("src/components/Button.tsx");
-  const [fileContent, setFileContent] = useState("");
   const [editorTabs] = useState([
     {
       id: "1",
