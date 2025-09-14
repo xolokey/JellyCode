@@ -1,4 +1,11 @@
 import { useState } from "react";
+import React from "react";
+
+declare global {
+  interface Window {
+    autoSaveTimeout: NodeJS.Timeout;
+  }
+}
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -12,6 +19,8 @@ import { GitPanel } from "../git/GitPanel";
 import { SearchPanel } from "../search/SearchPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PanelLeft, PanelRight, Files, GitBranch, Search, MessageSquare, Settings, X } from "lucide-react";
+import { apiClient } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 
 interface AppLayoutProps {
   // Add props as needed for real implementation
@@ -22,9 +31,85 @@ export function AppLayout({}: AppLayoutProps) {
   const [rightPanelVisible, setRightPanelVisible] = useState(true);
   const [leftActiveTab, setLeftActiveTab] = useState("files");
   const [rightActiveTab, setRightActiveTab] = useState("chat");
+
+  // Fetch file tree from backend
+  const { data: fileTreeData } = useQuery({
+    queryKey: ["/api/files/tree"],
+    queryFn: () => apiClient.getFileTree(),
+    refetchOnWindowFocus: false,
+  });
+
+  // Load file content when active file changes
+  const { data: fileData } = useQuery({
+    queryKey: ["/api/files/content", activeFile],
+    queryFn: () => apiClient.readFile(activeFile),
+    enabled: !!activeFile,
+    refetchOnWindowFocus: false,
+  });
+
+  // Update content when file data loads
+  React.useEffect(() => {
+    if (fileData?.content) {
+      setFileContent(fileData.content);
+    }
+  }, [fileData]);
+
+  const handleFileSelect = async (path: string) => {
+    console.log("File selected:", path);
+    setActiveFile(path);
+  };
+
+  const handleFileSave = async (content: string) => {
+    if (!activeFile) return;
+    try {
+      await apiClient.writeFile(activeFile, content);
+      console.log("File saved successfully");
+    } catch (error) {
+      console.error("Failed to save file:", error);
+    }
+  };
+
+  const handleLLMRequest = async (message: string) => {
+    try {
+      const response = await apiClient.chatCompletion(message, fileContent);
+      console.log("LLM response:", response);
+      return response;
+    } catch (error) {
+      console.error("LLM request failed:", error);
+      throw error;
+    }
+  };
+
+  const handleCodeAction = async (action: string, code: string) => {
+    try {
+      let response;
+      switch (action) {
+        case "explain":
+          response = await apiClient.explainCode(code);
+          break;
+        case "refactor":
+          response = await apiClient.refactorCode(code, fileContent);
+          break;
+        case "generate-tests":
+          response = await apiClient.generateTests(code);
+          break;
+        case "optimize":
+          response = await apiClient.optimizeCode(code);
+          break;
+        default:
+          throw new Error("Unknown action");
+      }
+      console.log("Code action response:", response);
+      return response;
+    } catch (error) {
+      console.error("Code action failed:", error);
+      throw error;
+    }
+  };
   
   // Mock data for demonstration
-  const [activeFile] = useState("src/components/Button.tsx");
+  const [activeFile, setActiveFile] = useState("src/components/Button.tsx");
+  const [fileContent, setFileContent] = useState("");
   const [editorTabs] = useState([
     {
       id: "1",
@@ -180,9 +265,9 @@ export function CustomButton({
 
                     <TabsContent value="files" className="flex-1 m-0">
                       <FileTree
-                        files={mockFiles}
+                        files={fileTreeData?.files || mockFiles}
                         selectedFile={activeFile}
-                        onFileSelect={(path) => console.log("File selected:", path)}
+                        onFileSelect={handleFileSelect}
                         onFileCreate={(parentPath, type) => console.log("Create", type, "in", parentPath)}
                         onFileRename={(path, newName) => console.log("Rename", path, "to", newName)}
                         onFileDelete={(path) => console.log("Delete", path)}
@@ -251,9 +336,16 @@ export function CustomButton({
 
               <div className="flex-1">
                 <MonacoEditor
-                  value={sampleCode}
+                  value={fileContent || sampleCode}
                   language="typescript"
-                  onChange={(value) => console.log("Code changed:", value.length, "chars")}
+                  onChange={(value) => {
+                    setFileContent(value);
+                    // Auto-save after 2 seconds of no changes
+                    clearTimeout(window.autoSaveTimeout);
+                    window.autoSaveTimeout = setTimeout(() => {
+                      handleFileSave(value);
+                    }, 2000);
+                  }}
                   onCursorPositionChange={(line, column) => console.log("Cursor:", line, column)}
                   theme="dark"
                 />
@@ -300,8 +392,11 @@ export function CustomButton({
 
                     <TabsContent value="chat" className="flex-1 m-0">
                       <ChatPanel
-                        onSendMessage={(message) => console.log("Message sent:", message)}
-                        onCodeApply={(code) => console.log("Apply code:", code)}
+                        onSendMessage={handleLLMRequest}
+                        onCodeApply={(code) => {
+                          setFileContent(code);
+                          handleFileSave(code);
+                        }}
                         isLoading={false}
                       />
                     </TabsContent>
