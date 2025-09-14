@@ -1,9 +1,11 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Zap, MessageSquare, Code, TestTube, Copy, Search, Replace, Maximize, Minimize } from "lucide-react";
+import Editor, { loader } from "@monaco-editor/react";
+import type { editor } from "monaco-editor";
 
 interface MonacoEditorProps {
   value: string;
@@ -21,7 +23,14 @@ interface CodeAction {
   description: string;
 }
 
-export function MonacoEditor({
+// Configure Monaco loader to prevent timing issues
+loader.init().then(() => {
+  console.log('Monaco Editor loader initialized');
+}).catch((error) => {
+  console.error('Monaco Editor loader failed:', error);
+});
+
+export const MonacoEditor = memo(function MonacoEditor({
   value,
   language,
   onChange,
@@ -29,11 +38,12 @@ export function MonacoEditor({
   readOnly = false,
   theme = "dark",
 }: MonacoEditorProps) {
-  const editorRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [selectedText, setSelectedText] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFind, setShowFind] = useState(false);
+  const [isEditorReady, setIsEditorReady] = useState(false);
 
   const codeActions: CodeAction[] = [
     {
@@ -62,38 +72,77 @@ export function MonacoEditor({
     },
   ];
 
-  useEffect(() => {
-    // TODO: Initialize Monaco Editor here
-    // This would integrate with @monaco-editor/react in a real implementation
-    console.log("Monaco Editor initialized with:", { language, theme, readOnly });
-    
-    // Simulate cursor position updates
-    const interval = setInterval(() => {
-      const newLine = Math.floor(Math.random() * 50) + 1;
-      const newColumn = Math.floor(Math.random() * 80) + 1;
-      setCursorPosition({ line: newLine, column: newColumn });
-      onCursorPositionChange?.(newLine, newColumn);
-    }, 3000);
+  const handleEditorDidMount = useCallback((editor: editor.IStandaloneCodeEditor) => {
+    try {
+      editorRef.current = editor;
+      setIsEditorReady(true);
+      console.log("Monaco Editor initialized with:", { language, theme, readOnly });
+      
+      // Listen for cursor position changes
+      editor.onDidChangeCursorPosition((e) => {
+        setCursorPosition({ line: e.position.lineNumber, column: e.position.column });
+        onCursorPositionChange?.(e.position.lineNumber, e.position.column);
+      });
 
-    return () => clearInterval(interval);
+      // Listen for selection changes
+      editor.onDidChangeCursorSelection((e) => {
+        const model = editor.getModel();
+        if (model) {
+          const selectedText = model.getValueInRange(e.selection);
+          setSelectedText(selectedText);
+        }
+      });
+
+      // Focus the editor
+      editor.focus();
+    } catch (error) {
+      console.error('Monaco Editor mount error:', error);
+    }
   }, [language, theme, readOnly, onCursorPositionChange]);
 
-  const handleCodeAction = (actionId: string) => {
-    console.log(`Code action triggered: ${actionId}`, { selectedText, cursorPosition });
-    // TODO: Integrate with AI backend
-  };
+  const handleCodeAction = useCallback((actionId: string) => {
+    const editor = editorRef.current;
+    if (!editor || !isEditorReady) return;
 
-  const handleCopy = () => {
+    const model = editor.getModel();
+    const selection = editor.getSelection();
+    
+    if (model && selection) {
+      const selectedCode = model.getValueInRange(selection);
+      console.log(`Code action triggered: ${actionId}`, { 
+        selectedText: selectedCode, 
+        cursorPosition,
+        lineCount: model.getLineCount()
+      });
+      // TODO: Integrate with AI backend for code actions
+    }
+  }, [cursorPosition, isEditorReady]);
+
+  const handleCopy = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor || !isEditorReady) return;
+    
     if (selectedText) {
       navigator.clipboard.writeText(selectedText);
       console.log("Text copied to clipboard");
+    } else {
+      // If no selection, copy current line
+      const model = editor.getModel();
+      const position = editor.getPosition();
+      if (model && position) {
+        const lineContent = model.getLineContent(position.lineNumber);
+        navigator.clipboard.writeText(lineContent);
+        console.log("Current line copied to clipboard");
+      }
     }
-  };
+  }, [selectedText, isEditorReady]);
 
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
-    console.log(`Fullscreen: ${!isFullscreen}`);
-  };
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen(prev => {
+      console.log(`Fullscreen: ${!prev}`);
+      return !prev;
+    });
+  }, []);
 
   return (
     <div className={`flex flex-col h-full ${isFullscreen ? "fixed inset-0 z-50 bg-background" : ""}`} data-testid="monaco-editor">
@@ -244,42 +293,58 @@ export function MonacoEditor({
       )}
 
       {/* Monaco Editor Container */}
-      <div 
-        ref={editorRef} 
-        className="flex-1 bg-background font-mono text-sm"
-        onClick={() => {
-          // Simulate text selection
-          const selection = "const hello = 'world';";
-          setSelectedText(selection);
-          console.log("Text selected:", selection);
-        }}
-        data-testid="editor-content"
-      >
-        {/* TODO: Replace with actual Monaco Editor */}
-        <div className="h-full p-4 overflow-auto">
-          <div className="text-muted-foreground">
-            <p>// Monaco Editor will be integrated here</p>
-            <p>// Language: {language}</p>
-            <p>// Theme: {theme}</p>
-            <p>// ReadOnly: {readOnly.toString()}</p>
-            <br />
-            <p>// Click to simulate text selection</p>
-            <p>// Use toolbar buttons to test AI actions</p>
-            <br />
-            <pre className="text-foreground">
-{`function calculateSum(a, b) {
-  return a + b;
-}
-
-const result = calculateSum(5, 3);
-console.log('Result:', result);
-
-// This is a sample file for demonstration
-// Select text and use AI actions from the toolbar`}
-            </pre>
+      <div className="flex-1" data-testid="editor-content">
+        {!isEditorReady && (
+          <div className="h-full flex items-center justify-center bg-muted/5">
+            <div className="text-center">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-2"></div>
+              <p className="text-sm text-muted-foreground">Loading editor...</p>
+            </div>
           </div>
-        </div>
+        )}
+        <Editor
+          height="100%"
+          language={language}
+          value={value}
+          onChange={(newValue) => onChange?.(newValue || "")}
+          onMount={handleEditorDidMount}
+          theme={theme === "dark" ? "vs-dark" : "light"}
+          loading={null} // Disable default loading screen
+          options={{
+            readOnly,
+            minimap: { enabled: true },
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            fontSize: 14,
+            lineHeight: 20,
+            fontFamily: 'JetBrains Mono, Fira Code, Monaco, "Courier New", monospace',
+            cursorBlinking: "smooth",
+            cursorSmoothCaretAnimation: "on",
+            smoothScrolling: true,
+            folding: true,
+            foldingStrategy: "indentation",
+            renderLineHighlight: "line",
+            selectOnLineNumbers: true,
+            mouseWheelZoom: true,
+            contextmenu: true,
+            wordWrap: "bounded",
+            wordWrapColumn: 120,
+            rulers: [80, 120],
+            bracketPairColorization: {
+              enabled: true,
+            },
+            suggest: {
+              showKeywords: true,
+              showSnippets: true,
+            },
+            quickSuggestions: {
+              other: true,
+              comments: true,
+              strings: true,
+            },
+          }}
+        />
       </div>
     </div>
   );
-}
+});
